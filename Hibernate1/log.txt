@@ -1,0 +1,135 @@
+2017年1月9日19:12:41：
+ 1.在UserBean.hbm.xml文件中多写了一个 > 造成了class处报错：
+ The content of element type "class" must match 
+"(meta*,subselect?,cache?,synchronize*,comment?,tuplizer*,(id|composite-id),discriminator?,natural-id?,
+(version|timestamp)?,(property|many-to-one|one-to-one|component|dynamic-component|properties|
+any|map|set|list|bag|idbag|array|primitive-array)*,((join*,subclass*)|joined-subclass*|union-
+subclass*),loader?,sql-insert?,sql-update?,sql-delete?,filter*,fetch-profile*,resultset*,(query|sql-query)*)".
+
+出现类似的标签不匹配的错误，多半是在书写不符合xml格式规范
+
+2017年1月9日20:02:29：
+历经千辛万苦终于完成了第一个数据写入数据库
+需要的核心包在    "E:\lianxi\JAVA\Hibernate 核心包"   目录下
+2017年1月11日10:25:37：
+1. //user.setId(100);
+	//主键 id 配置的 generator是increment  
+	//所以不能自己设置id号，如果想要自己设置id号，需要将generator设置为assigned
+	<id name="id" column="id" type="java.lang.Integer">
+		<!-- 设置主键的增长方式——自增长 -->
+		<generator class="increment"></generator>
+	</id>
+2017年1月12日09:29:33：
+1. 在SessionFactory中，如果要使用 getCurrentSession()方法，要在hibernate.cfg.xml文件中配置一条属性
+  	<property name="current_session_context_class">thread</property>
+ 	这条配置的意思表示 session 是和当前的线程（thread）绑定的
+ 	
+ 2. 事务回滚
+定义：如果事物中的某个点发生了故障，则整个事物回到开始时候的状态，也就是没有进行任何操作，保证了数据的一致性
+如何在hibernate中回滚事物？
+ Session sess = factory.openSession();
+ Transaction tx;
+ try {
+     tx = sess.beginTransaction();
+     //do some work
+     ...
+     tx.commit();
+ }
+ catch (Exception e) {
+     if (tx!=null) tx.rollback();
+     throw new RuntimeException(e.getMessage());//抛出一个运行时异常，是否处理就有一了选择权
+ }
+ finally {
+    if(sess!=null&&sess.isOpean) sess.close();//当sess不空而且正在连接的时候才关闭，直接关闭可能会抛异常
+ }
+ 事务回滚的应用：
+ Test1.java
+ ---------------------------------------------------------------
+ public class Test1 {
+	
+	public static void main(String []args){
+		
+		// TODO Auto-generated method stub
+		//使用openSession()打开一个,注意和getCurrentSession()区别(是否需要手动关闭)
+		 Session session=MySessionFactory.getSessionFactory().openSession();
+		 Transaction ta=null;
+		 //事务回滚 roll-back
+		 try {
+			//开始事务
+			ta=session.beginTransaction();
+			//进行会话
+			UserBean user=(UserBean)session.load(UserBean.class, 1);
+			user.setHiredate(new Date());
+			//这里调用Test2的test(Session session,UserBean user,Transaction ta);
+			Test2 t=new Test2();
+			t.test(session, user,ta);
+			//提交事务 
+			
+		} catch (Exception e) {
+			// TODO: handle exception
+			//如果发生异常，就回滚
+			e.printStackTrace();
+			if(ta!=null){
+				ta.rollback();
+			}
+		}finally{
+			//使用openSession()打开的会话需要手动关闭，如果session是不为空，并且有会话进行，就将会话关闭
+			if(session!=null&&session.isOpen()){
+				session.close();
+			}
+		}
+	}
+}
+
+-------------------------------------------------
+Test2.java
+-------------------------------------------------
+package com.hiber1.test;
+
+import java.util.Date;
+
+import org.hibernate.Session;
+import org.hibernate.Transaction;
+
+import com.hiber1.domain.UserBean;
+import com.hiber1.util.MySessionFactory;
+
+public class Test2 {
+	
+	public void test(Session session,UserBean user,Transaction ta){
+		
+		 //事务回滚 roll-back
+		 try {
+			//开始事务
+			
+			//进行会话
+			user=(UserBean)session.load(UserBean.class, 88); //这里出现了异常
+			user.setHiredate(new Date());
+			//提交事务 
+			ta.commit();
+		} catch (Exception e) {
+			// TODO: handle exception
+			e.printStackTrace();
+			//如果发生异常，就回滚
+			if(ta!=null){
+				ta.rollback();
+			}
+		}finally{
+			//使用openSession()打开的会话需要手动关闭，如果session是不为空，并且有会话进行，就将会话关闭
+			if(session!=null&&session.isOpen()){
+				session.close();
+			}
+		}
+	}
+}
+--------------------------------------------------------
+结论，如果在不同类里面要实现跨类事务回滚，需要使 Session 和 Transaction都是单态，这两个对象要传递使用
+
+
+2017年1月13日10:59:05：
+1 ThreadLocal可以将一个变量和一个线程绑定，getCurrentSession()就是使用ThreadLocal
+一ThreadLocal 每一个实例化的ThreadLocal对象可以绑定一个类型的变量，但是都是指向当前线程，也就是线程是唯一的，
+			 但是根据实例化对象的个数，变量绑定不是唯一的
+			 
+2017年2月15日10:33:10：
+	query接口，通过query接口可以完成更加复杂的查询
